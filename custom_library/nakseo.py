@@ -2,6 +2,8 @@ import numpy as np
 import cv2
 import CardDetection
 
+
+
 img_size = (480,640) # W,H
 p_c = 0.4 # size of gray grid line in length percent
 p_w = 0.2 # size of edge detection window, ratio wrt grid center cell 
