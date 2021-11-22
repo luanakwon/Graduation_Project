@@ -5,11 +5,11 @@ mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_hands = mp.solutions.hands
 
-cap = cv2.VideoCapture('mytestvideo.mp4')
+cap = cv2.VideoCapture('mytestvideo2.mp4')
 
-resolution = (450,800)
+resolution = (1080,1920)
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('outVideo.mp4',fourcc,30.0,resolution)
+out = cv2.VideoWriter('outVideo2.mp4',fourcc,30.0,resolution)
 
 
 with mp_hands.Hands(
