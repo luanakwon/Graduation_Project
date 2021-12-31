@@ -71,7 +71,7 @@ def run(grimg, p_c, p_w):
         dysq = cv2.Sobel(pedge,-1,0,1,ksize=5)
         dysq = dysq**2
 
-        std_thres = 0.3
+        std_thres = 0.1
         thres = std_thres*np.std(dysq) + np.mean(dysq)
         left_bias, right_bias = linear_regression2(dysq,thres)
         

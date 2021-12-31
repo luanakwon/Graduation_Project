@@ -1,65 +1,64 @@
-import numpy as np
 import cv2
-import CardDetection
+import numpy as np
+import mediapipe as mp
 
 
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+mp_hands = mp.solutions.hands
 
-img_size = (480,640) # W,H
-p_c = 0.4 # size of gray grid line in length percent
-p_w = 0.2 # size of edge detection window, ratio wrt grid center cell 
-
-# use webcam
 cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-# cordinate required to draw gray grid line
-crop_window, _ = CardDetection.get_cw(img_size,p_c,p_w)
+resolution = (480,640)
 
-# video save settings
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('card_detect_result.mp4',fourcc,30.0,img_size)
-
-while cv2.waitKey(33) < 0:
-    # read image from webcam
-    ret, img = cap.read()
-    # mirror image
-    img = cv2.flip(img,flipCode=1)
-    # change to portrait of ratio 800:600
-    img = cv2.resize(img[:,140:500],dsize=img_size)
-
-    # all calculation in 1 channel grayscale img
-    grimg = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-
-    # draw gray grid
-    img[crop_window[0][0],:] = (150,150,150)
-    img[crop_window[1][0],:] = (150,150,150)
-    img[:,crop_window[0][1]] = (150,150,150)
-    img[:,crop_window[1][1]] = (150,150,150)
-
-    # detect card that fits in center grid cell
-    # ret = False if no card detected
-    # corner in clockwise order, starting from top left
-    ret, corners = CardDetection.run(grimg,p_c,p_w)
+with mp_hands.Hands(
+    static_image_mode=True,
+    max_num_hands=2,
+    model_complexity= 0,
+    min_detection_confidence=0.5,) as hands:
     
-    # draw card contour
-    if ret:
-        print(f'{ret}, {corners}')
-        img = cv2.line(img,corners[0],corners[1],(0,255,255),1)
-        img = cv2.line(img,corners[1],corners[2],(0,255,255),1)
-        img = cv2.line(img,corners[2],corners[3],(0,255,255),1)
-        img = cv2.line(img,corners[3],corners[0],(0,255,255),1)
+    while cv2.waitKey(33) < 0:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # mirror the frame
+        img = cv2.flip(frame,flipCode=1)
+
+        # change to portrait of ratio 800:600
+        img = cv2.resize(img[:,140:500],dsize=resolution)
+
+        img.flags.writeable = False
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = hands.process(img)
+
+        img.flags.writeable = True
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                mp_drawing.draw_landmarks(
+                    img,
+                    hand_landmarks,
+                    mp_hands.HAND_CONNECTIONS,
+                    mp_drawing_styles.get_default_hand_landmarks_style(),
+                    mp_drawing_styles.get_default_hand_connections_style())
+
+            for handedness in results.multi_handedness:
+                print(handedness)
+            
+        #         for p_idx in [6,10,14,18]:
+        #             print(hand_landmarks.landmark[p_idx])
+        #             anc_x = hand_landmarks.landmark[p_idx].x
+        #             anc_y = hand_landmarks.landmark[p_idx].y
+        #             anc_x = int(anc_x*resolution[0]-ROI_win_size/2)
+        #             anc_y = int(anc_y*resolution[1]-ROI_win_size/2)
+        #             ROI_mask[anc_y:anc_y+ROI_win_size,anc_x:anc_x+ROI_win_size] = 1
+        
+        # masked_img = img*ROI_mask
+
+        #img = cv2.flip(img, 1)
+        cv2.resize(img,dsize=(0,0),fx=0.5,fy=0.5)
+        cv2.imshow('title',img)
+
     
-    # display
-    cv2.imshow('blank0',img)
-    # write frame
-    out.write(img)
-
-cap.release()
-out.release()
-cv2.destroyAllWindows()
-
-
-
-
-
+    
