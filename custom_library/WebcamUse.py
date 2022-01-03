@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-import CardDetection
+import CardDetection2
 import FingerDipDetection
 
 def DrawSquare(src,center, size, color, thickness=1):
@@ -27,15 +27,17 @@ def DrawTiltedSquare(src,center,dir,size,color,thickness=1):
     return dst
 
 def CropTiltedSquare(src,center,dir,size,dsize):
+    # finger direction in (x,y)
     dv = dir.astype(np.float32).copy()
     dv /= np.sqrt(np.sum(dv*dv))
     dv = (dv*size).astype(np.int32)
+    # turn 90 anti-clockwise 
     Hdv = np.flip(dv).copy()
     Hdv[1] *= -1
-    start = center - dv//2 - Hdv//2
+    start = center - dv//2 + Hdv//2
     s = dsize
-    input_pts = np.float32([start,start+dv,start+dv+Hdv,start+Hdv]).reshape(4,2)
-    output_pts = np.float32([[0,0],[s-1,0],[s-1,s-1],[0,s-1]])
+    input_pts = np.float32([start,start+dv,start+dv-Hdv,start-Hdv]).reshape(4,2)
+    output_pts = np.float32([[0,s-1],[0,0],[s-1,0],[s-1,s-1]])
     M = cv2.getPerspectiveTransform(input_pts,output_pts)
     dst = cv2.warpPerspective(src,M,(s,s),flags=cv2.INTER_LINEAR)
     return dst
@@ -43,17 +45,20 @@ def CropTiltedSquare(src,center,dir,size,dsize):
 
 def WebcamDemo():
     # CardDetection settings
-    img_size = (480,640) # W,H
+    img_size = (640,360) # W,H
     p_c = 0.4 # size of gray grid line in length percent
     p_w = 0.2 # size of edge detection window, ratio wrt grid center cell 
 
     # FingerDipDetection settings
     FDDtector = FingerDipDetection.FingerDipDetector()
 
+    # CardDetection settings
+    CDtector = CardDetection2.CardDetector((170,140),(160,200),p_w)
+
     # choose 100 continuous steady frames
     area1 = 0 # pseudo area of current frame
     area0 = 0 # pseudo area of last fram
-    area_base = img_size[0]*img_size[1]*(p_c**2) # area of center grid cell(for norm)
+    area_base = CDtector.getCardGuideArea() # area of center grid cell(for norm)
     frame_counter = 0
     area_diff_thres = 0.2 # heuristic value
     frames_to_use = np.zeros((100,img_size[1],img_size[0],3),dtype=np.uint8)
@@ -63,7 +68,8 @@ def WebcamDemo():
     FDD_dirs = np.zeros((100,4,2))
 
     # cordinate required to draw gray grid line
-    crop_window, _ = CardDetection.get_cw(img_size,p_c,p_w)
+    cgp = CDtector.getCardGuidePoint(order='xy')
+    cgp = cgp.astype(np.int32)
 
     # turn on the webcam
     cap = cv2.VideoCapture(0)
@@ -87,7 +93,7 @@ def WebcamDemo():
         original_img = cv2.flip(frame,flipCode=1)
 
         # change to portrait of ratio 800:600
-        original_img = cv2.resize(original_img[:,140:500],dsize=img_size)
+        original_img = cv2.resize(original_img[140:500,:],dsize=img_size)
         
         img = original_img.copy()
 
@@ -95,22 +101,22 @@ def WebcamDemo():
         grimg = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 
         # draw gray grid
-        img[crop_window[0][0],:] = (150,150,150)
-        img[crop_window[1][0],:] = (150,150,150)
-        img[:,crop_window[0][1]] = (150,150,150)
-        img[:,crop_window[1][1]] = (150,150,150)
+        img = cv2.line(img,cgp[0],cgp[1],(150,150,150),1)
+        img = cv2.line(img,cgp[1],cgp[2],(150,150,150),1)
+        img = cv2.line(img,cgp[2],cgp[3],(150,150,150),1)
+        img = cv2.line(img,cgp[3],cgp[0],(150,150,150),1)
 
         # detect card that fits in center grid cell
         # ret = False if no card detected
         # corner in clockwise order, starting from top left
-        ret, corners = CardDetection.run(grimg,p_c,p_w)
+        ret, corners = CDtector.run(grimg)
         area1 = 0
         # draw card contour
         if ret:
             img = cv2.line(img,corners[0],corners[1],(0,255,255),1)
-            img = cv2.line(img,corners[1],corners[2],(0,255,255),1)
-            img = cv2.line(img,corners[2],corners[3],(0,255,255),1)
-            img = cv2.line(img,corners[3],corners[0],(0,255,255),1)
+            img = cv2.line(img,corners[1],corners[2],(0,255,200),1)
+            img = cv2.line(img,corners[2],corners[3],(0,255,150),1)
+            img = cv2.line(img,corners[3],corners[0],(0,255,100),1)
             
             for c in corners:
                 area1 += abs(c[0]*c[1])
@@ -174,25 +180,26 @@ def WebcamDemo():
     # but not implemented in this demo
 
     # seems like mediapipe hand detection doesn't work very well
-    # with palm covered. Since it tends to shrink the hands, choose
-    # the frame with finger dips spreaded wide
-    max_wide = 0
+    # with palm covered with card. 
+    # ==> fixed 20220102: moved the card to the side
+
+    # choose the shot with fingers most wide
+    max_mean = 0
     for i in range(frames_to_use.shape[0]):
         if FDD_rets[i]:
-            wideness = (-FDD_dips[i][0][0]-FDD_dips[i][1][0]
-                +FDD_dips[i][2][0]+FDD_dips[i][3][0])
-            if max_wide < wideness:
+            a_mean = (FDD_dips[i,3,0]-FDD_dips[i,0,0])/4
+            h_mean = 4/sum([1/(x1-x0) 
+                for x0, x1 in zip(FDD_dips[i,:3,0],FDD_dips[i,1:,0])])
+            if max_mean < (a_mean + h_mean):
                 frame_counter = i
-                max_wide = wideness
+                max_mean = (a_mean + h_mean)
+
+            print(i,a_mean,h_mean)
 
     # warp perspective
     img = frames_to_use[frame_counter]
     input_pts = corners_to_use[frame_counter]
-    output_pts = np.array(
-        [crop_window[0][1],crop_window[0][0],
-        crop_window[1][1],crop_window[0][0],
-        crop_window[1][1],crop_window[1][0],
-        crop_window[0][1],crop_window[1][0]],dtype=np.float32).reshape((4,2))
+    output_pts = cgp.astype(np.float32)
     print(input_pts, output_pts)
     M=cv2.getPerspectiveTransform(input_pts,output_pts)
     T_img = cv2.warpPerspective(img,M,img_size,flags=cv2.INTER_LINEAR)
@@ -203,6 +210,8 @@ def WebcamDemo():
     FDD_cors = np.matmul(M,FDD_cors)
     FDD_cors = (FDD_cors/FDD_cors[2]).astype(np.int32)
     FDD_cors = np.transpose(FDD_cors[:2])
+
+    print(FDD_cors)
 
     # crop and save 4 finger dips
     ROI_crops = np.zeros((4,200,200,3),dtype=np.uint8)
