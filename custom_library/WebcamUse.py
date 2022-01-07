@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 import CardDetection2
 import FingerDipDetection
+import MagicWand
 
 def DrawSquare(src,center, size, color, thickness=1):
     cx,cy = center
@@ -229,7 +231,19 @@ def WebcamDemo():
     for i, crop in enumerate(ROI_crops):
         cv2.imshow(f'crop{i}',crop)
         cv2.waitKey()
+        lct = time.localtime()
+        lctstr = '%4d%02d%02d%02d%02d'%(
+            lct.tm_year,lct.tm_mon,lct.tm_mday,lct.tm_hour,lct.tm_min)
+        cv2.imwrite(f'./cropped_finger/{lctstr}_{i}.png',crop)
+        print(f'image saved as /cropped_finger/{lctstr}_{i}.png')
     cv2.imwrite('shba_hand.png',T_img)
+
+
+    # apply magic wand to seperate finger from background
+    for crop in ROI_crops:
+        layer = MagicWand.apply(crop,(crop.shape[0]//2,crop.shape[1]//2),60)
+        outline = cv2.Sobel(layer,-1,1,0)
+        
 
 
     
