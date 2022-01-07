@@ -4,6 +4,8 @@ import mediapipe as mp
 
 
 import os
+
+from numpy.core.fromnumeric import argmax, argmin
 import MagicWand
 
 img = cv2.imread(os.path.join('cropped_finger','0highres.png'))
@@ -27,11 +29,76 @@ right_edge_x = np.argmax(((width-xv)*-dx)[:,int(width*0.3):],axis=1)
 right_edge_x += int(width*0.3)
 print((xv)[20])
 
+distances = np.zeros_like(left_edge_x)
+points = []
+
+# algorithm that goes back and forth between left and right edge
+edge0 = left_edge_x
+edge1 = right_edge_x
+p0_y = 0
+p1_y = 0
+while True:
+    points.append((edge0[p0_y],p0_y))
+
+    p0_x = edge0[p0_y]
+    d = []
+    for i in range(2):
+        if p1_y+i < len(edge1):
+            d.append(np.sqrt((p1_y+i-p0_y)**2+(p0_x-edge1[p1_y+i])**2))
+    if len(d) == 0:
+        print(not d)
+        break
+
+    print(argmin(d),min(d))
+    distances[p0_y] = min(d)
+
+    t = edge0
+    edge0 = edge1
+    edge1 = t
+
+    t = p0_y+1
+    p0_y = p1_y+argmin(d)
+    p1_y = t
+
+img2 = img.copy()
+for p0, p1 in zip(points[:-1],points[1:]):
+    cv2.line(img2,p0,p1,(0,100,100),1)
+
+cv2.imshow('shoelace',img2)
+
+#smoothing the outliers(distance == 0)
+for i, d in enumerate(distances):
+    if d == 0:
+        # for the first value
+        if i == 0:
+            for d_next in distances[i+1:]:
+                if d_next != 0:
+                    d = d_next
+        # for the last value
+        elif i == len(distances)-1:
+            for d_last in distances[:i].flipud():
+                if d_last != 0:
+                    d = d_last
+        # for the middle value
+        else:
+            for j in range(min([i+1,len(distances)-i,10])):
+                d_last = distances[i-j]
+                d_next = distances[i+j]
+                if d_last != 0 and d_next != 0:
+                    d = (d_last+d_next)/2
+
+        if d == 0:
+            raise ValueError('former process was bullshit')
+        else:
+            distances[i] = d
+        
+                
 
 import matplotlib.pyplot as plt
 plt.figure(figsize=(5,5))
 plt.plot(left_edge_x,label='L')
 plt.plot(right_edge_x,label='R')
+plt.plot(distances,label='D')
 plt.legend()
 plt.show()
 
