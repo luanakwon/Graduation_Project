@@ -37,6 +37,7 @@ class CardDetector:
         self.M_out2in = cv2.getPerspectiveTransform(
             self.offset_out_pts,self.offset_in_pts)
 
+
     def getCardGuidePoint(self, order='xy'):
         if order == 'xy':
             return np.flip(self.input_pts,axis=1)
@@ -46,6 +47,15 @@ class CardDetector:
     def getCardGuideArea(self):
         return self.area
 
+    '''
+    with an image of shape h,w, there is h*h reference lines that goes from
+    left to right(any angle). lb, rb are each left and right bias of rf_lines.
+    sq_d calculates (y_diff)^2 from pixel to reference line, 
+    for all pixels and rf_lines (thus, shape(h*w,h*h))
+    by counting sq_d<5 once and sq_d<2.5 again, each element in scores
+    represent how each rf line fit the filtered image
+    returns pixelwise y cor of lb,rb of best rf line = (lb[idx], rb[idx])
+    '''
     def linear_regression2(self,weighted_img, threshold):
         # my simple linear regression method
         height, width = weighted_img.shape[:2]
@@ -98,7 +108,7 @@ class CardDetector:
         # orientation : landscape
         dst = cv2.warpPerspective(
             src,self.M_in2out,(self.long_d,self.short_d),flags=cv2.INTER_LINEAR)
-        
+
         possible_edges, sup_v = self.getPossibleEdge(dst)
         pt8 = []
 

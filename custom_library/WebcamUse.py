@@ -111,6 +111,8 @@ def WebcamDemo():
         # detect card that fits in center grid cell
         # ret = False if no card detected
         # corner in clockwise order, starting from top left
+        print(grimg.shape)
+        return
         ret, corners = CDtector.run(grimg)
         area1 = 0
         # draw card contour
