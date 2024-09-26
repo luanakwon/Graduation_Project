@@ -259,7 +259,7 @@ def WebcamDemo():
         # closest F->T pixel from the reference column(0.7 of width)
         left_edge_x = np.argmax((xv*dx)[:,:int(c_w*0.7)],axis=1)
         # closest T->F pixel from the reference column(0.3 of width)
-        right_edge_x = np.argmax(((c_w-xv)*-dx)[:,int(c_w*0.3):],axis=1)
+        right_edge_x = np.argmax(((c_w-xv)*-dx)[:,int(c_w*0.3):],axis=1)# -c_w*dx + xv*dx
         right_edge_x += int(c_w*0.3)
 
         distances = np.zeros_like(left_edge_x)
